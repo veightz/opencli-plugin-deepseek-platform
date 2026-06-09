@@ -56,13 +56,6 @@ cli({
       || result.data?.created_at
       || 0;
 
-    // Store timestamp for future deletion
-    if (apiKey) {
-      const store = JSON.parse(localStorage.getItem('__apikey_meta') || '{}');
-      store[keyName] = { created_at, sensitive_id: apiKey };
-      localStorage.setItem('__apikey_meta', JSON.stringify(store));
-    }
-
     return [{
       Name: keyName,
       Key: apiKey,
