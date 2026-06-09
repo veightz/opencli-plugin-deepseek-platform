@@ -14,7 +14,9 @@ cli({
     { name: 'month', type: 'int', default: 0, help: 'Month (1-12, default: current)' },
     { name: 'year', type: 'int', default: 0, help: 'Year (default: current)' },
     { name: 'model', help: 'Filter by model name (e.g. deepseek-v4-flash)' },
-    { name: 'top', type: 'int', default: 0, help: 'Show only last N days' },
+    { name: 'top', type: 'int', default: 0, help: 'Show only last N days with usage' },
+    { name: 'today', type: 'bool', default: false, help: 'Show only today\'s usage' },
+    { name: 'date', help: 'Show usage for a specific date (YYYY-MM-DD)' },
   ],
   columns: ['Date', 'Model', 'Requests', 'CacheHit', 'CacheMiss', 'OutputTokens', 'CostCNY'],
 
@@ -26,7 +28,7 @@ cli({
     const month = kwargs.month || (now.getMonth() + 1);
     const year = kwargs.year || now.getFullYear();
 
-    const result = await page.evaluate(async ({ month, year, model, top }) => {
+    const result = await page.evaluate(async ({ month, year, model, top, today, date }) => {
       const raw = localStorage.getItem('userToken');
       if (!raw) {
         throw new Error('Not logged in. Please log into platform.deepseek.com first.');
@@ -107,26 +109,41 @@ cli({
         })
       );
 
-      // Filter out dates with no usage at all
-      const datesWithUsage = new Set();
-      for (const r of rows) {
-        if (r.Requests !== '0' || r.CacheHit !== '0' || r.CacheMiss !== '0' || r.OutputTokens !== '0') {
-          datesWithUsage.add(r.Date);
-        }
+      // Apply explicit date filters BEFORE empty-date filter,
+      // so asking for a specific date shows it even if all-zero
+      if (today) {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        rows = rows.filter((r) => r.Date === todayStr);
       }
-      rows = rows.filter((r) => datesWithUsage.has(r.Date));
+      if (date) {
+        rows = rows.filter((r) => r.Date === date);
+      }
 
-      // Normalize: force each model's daily cost sum to match monthly total
-      const modelCostSum2 = {};
-      for (const r of rows) {
-        modelCostSum2[r.Model] = (modelCostSum2[r.Model] || 0) + parseFloat(r.CostCNY);
+      // Filter out dates with no usage (skip when user asked for a specific date)
+      if (!today && !date) {
+        const datesWithUsage = new Set();
+        for (const r of rows) {
+          if (r.Requests !== '0' || r.CacheHit !== '0' || r.CacheMiss !== '0' || r.OutputTokens !== '0') {
+            datesWithUsage.add(r.Date);
+          }
+        }
+        rows = rows.filter((r) => datesWithUsage.has(r.Date));
       }
-      for (const r of rows) {
-        const modelTypes = monthlyCostByType[r.Model] || {};
-        const target = costTypes.reduce((s, t) => s + (modelTypes[t] || 0), 0);
-        const actual = modelCostSum2[r.Model] || 1;
-        if (target > 0 && Math.abs(actual - target) > 0.005) {
-          r.CostCNY = (Math.floor(parseFloat(r.CostCNY) * target / actual * 100) / 100).toFixed(2);
+
+      // Normalize: force each model's daily cost sum to match monthly total.
+      // Skip when user requests a specific date (would inflate single-day costs).
+      if (!today && !date) {
+        const modelCostSum2 = {};
+        for (const r of rows) {
+          modelCostSum2[r.Model] = (modelCostSum2[r.Model] || 0) + parseFloat(r.CostCNY);
+        }
+        for (const r of rows) {
+          const modelTypes = monthlyCostByType[r.Model] || {};
+          const target = costTypes.reduce((s, t) => s + (modelTypes[t] || 0), 0);
+          const actual = modelCostSum2[r.Model] || 1;
+          if (target > 0 && Math.abs(actual - target) > 0.005) {
+            r.CostCNY = (Math.floor(parseFloat(r.CostCNY) * target / actual * 100) / 100).toFixed(2);
+          }
         }
       }
 
@@ -147,7 +164,7 @@ cli({
       }
 
       return rows;
-    }, { month, year, model: kwargs.model, top: kwargs.top });
+    }, { month, year, model: kwargs.model, top: kwargs.top, today: kwargs.today, date: kwargs.date });
 
     return result;
   },
