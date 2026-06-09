@@ -18,30 +18,35 @@ cli({
     await new Promise((r) => setTimeout(r, 2000));
 
     const result = await page.evaluate(() => {
-      const body = document.body?.innerText || '';
-      const rows = [];
-      const lines = body.split('\n');
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.includes('sk-')) {
-          // Format: name  sk-xxx  created_date  status
-          const parts = trimmed.split('\t');
-          if (parts.length >= 4) {
-          rows.push({
-            Name: parts[0].trim(),
-            Key: parts[1].trim(),
-            CreatedAt: parts[2].trim(),
-            LastUsed: parts.slice(3).join(' ').trim(),
-          });
-          }
-        }
-      }
-      return rows;
-    });
+      const raw = localStorage.getItem('userToken');
+      if (!raw) throw new Error('Not logged in.');
+      const token = JSON.parse(raw).value;
 
-    if (result.length === 0) {
-      throw new Error('No API keys found on the page. Create one at platform.deepseek.com/api_keys first.');
-    }
+      return fetch('/api/v0/users/get_api_keys', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          accept: '*/*',
+          referer: 'https://platform.deepseek.com/api_keys',
+          'x-app-version': '1.0.0',
+        },
+      })
+        .then(r => r.json())
+        .then(data => {
+          const keys = data.data?.biz_data?.api_keys || data.data?.api_keys || data.api_keys || [];
+          return keys.map(k => ({
+            Name: k.name || '',
+            Key: k.sensitive_id
+              ? k.sensitive_id.slice(0, 10) + '****' + k.sensitive_id.slice(-4)
+              : k.redacted_key || '',
+            CreatedAt: k.created_at
+              ? new Date(k.created_at * 1000).toISOString().slice(0, 10)
+              : '',
+            LastUsed: k.last_use
+              ? new Date(k.last_use * 1000).toISOString().slice(0, 10)
+              : '-',
+          }));
+        });
+    });
 
     return result;
   },
