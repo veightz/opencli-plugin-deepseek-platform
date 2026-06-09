@@ -10,7 +10,7 @@ cli({
   strategy: Strategy.COOKIE,
   browser: true,
   navigateBefore: false,
-  columns: ['Name', 'Key', 'CreatedAt', 'Status'],
+  columns: ['Name', 'Key', 'CreatedAt', 'LastUsed'],
 
   func: async (page, kwargs) => {
     await page.goto('https://platform.deepseek.com/api_keys');
@@ -27,12 +27,12 @@ cli({
           // Format: name  sk-xxx  created_date  status
           const parts = trimmed.split('\t');
           if (parts.length >= 4) {
-            rows.push({
-              Name: parts[0].trim(),
-              Key: parts[1].trim(),
-              CreatedAt: parts[2].trim(),
-              Status: parts.slice(3).join(' ').trim(),
-            });
+          rows.push({
+            Name: parts[0].trim(),
+            Key: parts[1].trim(),
+            CreatedAt: parts[2].trim(),
+            LastUsed: parts.slice(3).join(' ').trim(),
+          });
           }
         }
       }
