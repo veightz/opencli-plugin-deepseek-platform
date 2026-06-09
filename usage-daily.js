@@ -46,9 +46,6 @@ cli({
       if (data.code !== 0) throw new Error(`Platform API error: ${data.msg || 'unknown'}`);
 
       const days = data.data?.biz_data?.days || [];
-      if (days.length === 0) {
-        return [{ Date: '(no data)', Model: '-', Requests: '0', CacheHit: '0', CacheMiss: '0', OutputTokens: '0' }];
-      }
 
       let rows = days.flatMap((day) =>
         day.data.map((m) => {
@@ -70,11 +67,14 @@ cli({
 
       if (top > 0) {
         const seen = new Set();
-        rows = rows.filter((r) => {
-          if (seen.size >= top && !seen.has(r.Date)) return false;
-          seen.add(r.Date);
-          return true;
-        });
+        rows = rows
+          .sort((a, b) => b.Date.localeCompare(a.Date))
+          .filter((r) => {
+            if (seen.has(r.Date)) return true;
+            if (seen.size >= top) return false;
+            seen.add(r.Date);
+            return true;
+          });
       }
 
       return rows;

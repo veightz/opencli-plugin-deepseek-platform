@@ -1,6 +1,7 @@
 {
   "name": "deepseek-platform-adapter",
   "version": "1.0.0",
+  "type": "module",
   "description": "opencli adapter for DeepSeek platform billing and usage queries",
   "keywords": ["opencli", "deepseek", "billing", "usage", "adapter"],
   "license": "MIT"
