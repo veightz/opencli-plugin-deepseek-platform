@@ -11,6 +11,7 @@
 | `opencli deepseek-platform billing` | 查询账户余额 | 浏览器会话（自动） |
 | `opencli deepseek-platform apikey` | 列出 API Key | 浏览器会话（自动） |
 | `opencli deepseek-platform apikey-create` | 创建 API Key | 浏览器会话（自动） |
+| `opencli deepseek-platform apikey-delete` | 删除 API Key | 浏览器会话（自动） |
 | `opencli deepseek-platform usage` | 按月查询各模型用量与费用 | 浏览器会话（自动） |
 | `opencli deepseek-platform usage-daily` | 按日查询用量与费用明细 | 浏览器会话（自动） |
 
