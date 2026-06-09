@@ -1,6 +1,6 @@
 # OpenCLI 扩展参考
 
-> 本项目 (`deepseek-platform-adapter`) 是一个 OpenCLI 适配器。本文档帮助理解 OpenCLI 的工作原理以及如何扩展它。
+> 本项目 (`opencli-plugin-deepseek-platform`) 是一个 OpenCLI 插件。本文档帮助理解 OpenCLI 的工作原理以及如何扩展它。
 
 ## 什么是 OpenCLI？
 
