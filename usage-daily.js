@@ -52,22 +52,24 @@ cli({
 
       if (amountData.code !== 0) throw new Error(`Platform API error: ${amountData.msg || 'unknown'}`);
 
-      // Build per-model monthly cost by usage type
-      const monthlyCost = {};
+      const costTypes = ['PROMPT_CACHE_HIT_TOKEN', 'PROMPT_CACHE_MISS_TOKEN', 'RESPONSE_TOKEN'];
+
+      // Per-model: monthly cost per usage type (from cost API)
+      const monthlyCostByType = {};
       if (Array.isArray(costData.data?.biz_data)) {
         for (const entry of costData.data.biz_data) {
           for (const m of entry.total || []) {
-            monthlyCost[m.model] = Object.fromEntries(
+            monthlyCostByType[m.model] = Object.fromEntries(
               (m.usage || []).map((u) => [u.type, parseFloat(u.amount || 0)])
             );
           }
         }
       }
 
-      // Build per-model monthly token totals by usage type
-      const monthlyTokens = {};
+      // Per-model: monthly token total per usage type (from amount API total)
+      const monthlyTokensByType = {};
       for (const m of amountData.data?.biz_data?.total || []) {
-        monthlyTokens[m.model] = Object.fromEntries(
+        monthlyTokensByType[m.model] = Object.fromEntries(
           (m.usage || []).map((u) => [u.type, parseFloat(u.amount || 0)])
         );
       }
@@ -80,15 +82,16 @@ cli({
             (m.usage || []).map((u) => [u.type, parseFloat(u.amount || 0)])
           );
 
-          // Allocate daily cost proportionally by each usage type
-          let dailyCost = 0;
-          const modelCost = monthlyCost[m.model];
-          const modelTokens = monthlyTokens[m.model];
-          if (modelCost && modelTokens) {
-            for (const [type, dailyAmount] of Object.entries(usageMap)) {
-              if (dailyAmount > 0 && (modelTokens[type] || 0) > 0) {
-                dailyCost += (dailyAmount / modelTokens[type]) * (modelCost[type] || 0);
-              }
+          // Per-type proportional allocation, then normalize
+          let rawCost = 0;
+          const modelCost = monthlyCostByType[m.model] || {};
+          const modelTokens = monthlyTokensByType[m.model] || {};
+          for (const type of costTypes) {
+            const dailyAmt = usageMap[type] || 0;
+            const monthlyAmt = modelTokens[type] || 0;
+            const typeCost = modelCost[type] || 0;
+            if (dailyAmt > 0 && monthlyAmt > 0) {
+              rawCost += (dailyAmt / monthlyAmt) * typeCost;
             }
           }
 
@@ -99,7 +102,7 @@ cli({
             CacheHit: String(usageMap['PROMPT_CACHE_HIT_TOKEN'] || 0),
             CacheMiss: String(usageMap['PROMPT_CACHE_MISS_TOKEN'] || 0),
             OutputTokens: String(usageMap['RESPONSE_TOKEN'] || 0),
-            CostCNY: dailyCost.toFixed(4),
+            CostCNY: rawCost.toFixed(4),
           };
         })
       );
@@ -112,6 +115,20 @@ cli({
         }
       }
       rows = rows.filter((r) => datesWithUsage.has(r.Date));
+
+      // Normalize: force each model's daily cost sum to match monthly total
+      const modelCostSum2 = {};
+      for (const r of rows) {
+        modelCostSum2[r.Model] = (modelCostSum2[r.Model] || 0) + parseFloat(r.CostCNY);
+      }
+      for (const r of rows) {
+        const modelTypes = monthlyCostByType[r.Model] || {};
+        const target = costTypes.reduce((s, t) => s + (modelTypes[t] || 0), 0);
+        const actual = modelCostSum2[r.Model] || 1;
+        if (target > 0 && Math.abs(actual - target) > 0.0001) {
+          r.CostCNY = (parseFloat(r.CostCNY) * target / actual).toFixed(4);
+        }
+      }
 
       if (model) {
         rows = rows.filter((r) => r.Model.includes(model));
