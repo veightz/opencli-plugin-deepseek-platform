@@ -61,6 +61,15 @@ cli({
         })
       );
 
+      // Filter out future dates that have zero usage across all models
+      const datesWithUsage = new Set();
+      for (const r of rows) {
+        if (r.Requests !== '0' || r.CacheHit !== '0' || r.CacheMiss !== '0' || r.OutputTokens !== '0') {
+          datesWithUsage.add(r.Date);
+        }
+      }
+      rows = rows.filter((r) => datesWithUsage.has(r.Date));
+
       if (model) {
         rows = rows.filter((r) => r.Model.includes(model));
       }
