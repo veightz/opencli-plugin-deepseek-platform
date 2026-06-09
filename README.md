@@ -8,7 +8,7 @@ Query DeepSeek platform billing & usage from the command line, powered by [OpenC
 
 | Command | Description | Auth |
 |---------|-------------|------|
-| `opencli deepseek-platform billing` | Account balance | `DEEPSEEK_API_KEY` env var |
+| `opencli deepseek-platform billing` | Account balance | Browser session (auto) |
 | `opencli deepseek-platform usage` | Monthly token usage & cost by model | Browser session (auto) |
 | `opencli deepseek-platform usage-daily` | Daily token usage & cost breakdown | Browser session (auto) |
 
@@ -37,10 +37,10 @@ curl -fsSL https://github.com/veightz/opencli-plugin-deepseek-platform/archive/m
 
 ## Usage
 
-### Balance (requires API key)
+### Balance (auto from browser session)
 
 ```bash
-export DEEPSEEK_API_KEY="sk-xxxx"
+# Must be logged into platform.deepseek.com in Chrome
 opencli deepseek-platform billing -f table
 ```
 
@@ -68,8 +68,8 @@ opencli deepseek-platform usage-daily --month 5 --year 2026 -f csv
 
 ## How it works
 
-- **billing** calls `api.deepseek.com/user/balance` with your API key.
-- **usage** / **usage-daily** use OpenCLI's browser bridge to open `platform.deepseek.com/usage`, extract the session token from `localStorage`, and call the platform's internal `/api/v0/usage/*` endpoints. No manual token management needed.
+- **billing** navigates to `platform.deepseek.com`, intercepts the page's API responses to find balance data. No API key needed.
+- **usage** / **usage-daily** navigate to `platform.deepseek.com/usage`, extract the session token from `localStorage`, and call the platform's internal `/api/v0/usage/*` endpoints.
 
 ## License
 

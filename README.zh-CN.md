@@ -8,7 +8,7 @@
 
 | 命令 | 说明 | 认证方式 |
 |------|------|---------|
-| `opencli deepseek-platform billing` | 查询账户余额 | `DEEPSEEK_API_KEY` 环境变量 |
+| `opencli deepseek-platform billing` | 查询账户余额 | 浏览器会话（自动） |
 | `opencli deepseek-platform usage` | 按月查询各模型用量与费用 | 浏览器会话（自动） |
 | `opencli deepseek-platform usage-daily` | 按日查询用量与费用明细 | 浏览器会话（自动） |
 
@@ -37,10 +37,10 @@ curl -fsSL https://github.com/veightz/opencli-plugin-deepseek-platform/archive/m
 
 ## 使用
 
-### 查询余额（需要 API Key）
+### 查询余额（自动从浏览器会话获取）
 
 ```bash
-export DEEPSEEK_API_KEY="sk-xxxx"
+# 需要在 Chrome 中登录 platform.deepseek.com
 opencli deepseek-platform billing -f table
 ```
 
