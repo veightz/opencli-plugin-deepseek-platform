@@ -51,43 +51,61 @@ cli({
       const meta = JSON.parse(localStorage.getItem('__apikey_meta') || '{}');
       const stored = meta[name];
 
-      if (stored && stored.created_at) {
+      const tryDelete = async (created_at) => {
         const res = await fetch('/api/v0/users/edit_api_keys', {
           method: 'POST',
           headers,
-          body: JSON.stringify({ action: 'delete', name: null, redacted_key, created_at: stored.created_at }),
+          body: JSON.stringify({ action: 'delete', name: null, redacted_key, created_at }),
         });
-        if (res.ok) return { success: true, method: 'stored' };
+        if (!res.ok) return false;
+        const data = await res.json();
+        return data.code === 0;
+      };
+
+      if (stored && stored.created_at) {
+        const ok = await tryDelete(stored.created_at);
+        if (ok) return { success: true, method: 'stored', created_at: stored.created_at };
       }
 
-      // Try brute force: scan recent timestamps
-      const now = Math.floor(Date.now() / 1000);
-      const start = now - 86400;
-      for (let ts = start; ts <= now; ts++) {
-        try {
-          const res = await fetch('/api/v0/users/edit_api_keys', {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({ action: 'delete', name: null, redacted_key, created_at: ts }),
-          });
-          if (!res.ok) continue;
-          const data = await res.json();
-          if (data.code === 0) {
-            const check = document.body?.innerText || '';
-            if (!check.includes(redacted_key.slice(0, 10))) {
-              return { success: true, method: `brute_ts=${ts}` };
-            }
-          }
-        } catch {}
+      // Try intercepting fetch by overriding it immediately and waiting for calls
+      const origFetch = window.fetch.bind(window);
+      let capturedList = null;
+
+      window.fetch = async (...args) => {
+        const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
+        const method = (args[1]?.method || 'GET').toUpperCase();
+        const res = await origFetch(...args);
+        // Capture GET endpoints that might contain api_keys
+        if (method === 'GET' && (url.includes('api_key') || url.includes('apikey') || url.includes('key'))) {
+          try {
+            const data = await res.clone().json();
+            capturedList = data;
+          } catch {}
+        }
+        return res;
+      };
+
+      // Wait briefly for any async data fetches
+      await new Promise(r => setTimeout(r, 1000));
+
+      if (capturedList) {
+        const list = capturedList.data?.biz_data?.api_keys || capturedList.data?.api_keys || capturedList.api_keys || [];
+        const target = list.find(k => k.name === name);
+        if (target && target.created_at) {
+          const ok = await tryDelete(target.created_at);
+          if (ok) return { success: true, method: 'intercepted', created_at: target.created_at };
+        }
       }
 
-      return { error: 'timestamp not found in last 24h', hint: 'Try deleting from platform.deepseek.com/api_keys' };
+      return { error: 'could not get created_at', hint: 'delete from web UI' };
+
+      return { error: 'delete failed - key may need manual deletion', redacted_key };
     }, keyName);
 
     if (result.success) {
-      return [{ Name: keyName, Status: 'Deleted', Message: result.method }];
+      return [{ Name: keyName, Status: 'Deleted', Message: `via ${result.method}` }];
     }
 
-    return [{ Name: keyName, Status: 'Failed', Message: result.error || JSON.stringify(result) }];
+    return [{ Name: keyName, Status: 'Limited', Message: result.error }];
   },
 });
