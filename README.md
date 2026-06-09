@@ -1,5 +1,7 @@
 # opencli-plugin-deepseek-platform
 
+[![中文](https://img.shields.io/badge/docs-中文-1D4ED8?style=flat-square)](README.zh-CN.md)
+
 Query DeepSeek platform billing & usage from the command line, powered by [OpenCLI](https://github.com/jackwener/OpenCLI).
 
 ## Commands

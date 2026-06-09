@@ -1,5 +1,7 @@
 # opencli-plugin-deepseek-platform
 
+[![English](https://img.shields.io/badge/docs-English-1D4ED8?style=flat-square)](README.md)
+
 在命令行查询 DeepSeek 平台余额和用量，基于 [OpenCLI](https://github.com/jackwener/OpenCLI) 构建。
 
 ## 命令
