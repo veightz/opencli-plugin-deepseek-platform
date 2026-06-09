@@ -23,34 +23,10 @@ cli({
     await page.wait({ selector: 'main', timeout: 15 });
     await new Promise((r) => setTimeout(r, 2000));
 
-    // Verify login and get redacted key
-    const prelim = await page.evaluate((name) => {
+    const result = await page.evaluate(async (name) => {
       const raw = localStorage.getItem('userToken');
       if (!raw) return { error: 'not logged in' };
-      let token;
-      try { token = JSON.parse(raw).value; } catch { return { error: 'invalid token format' }; }
-
-      // Check for stored created_at from previous apikey-create
-      const meta = JSON.parse(localStorage.getItem('__apikey_meta') || '{}');
-      const stored = meta[name] || null;
-
-      const body = document.body?.innerText || '';
-      const lines = body.split('\n').filter(l => l.includes('sk-'));
-      for (const line of lines) {
-        const parts = line.split('\t');
-        if (parts.length >= 3 && parts[0].trim() === name) {
-          return { ok: true, redacted_key: parts[1].trim(), token, stored };
-        }
-      }
-      return { error: `key "${name}" not found on page` };
-    }, keyName);
-
-    if (prelim.error) {
-      return [{ Name: keyName, Status: 'Error', Message: prelim.error }];
-    }
-
-    // Now scan timestamps with verification (or use stored timestamp)
-    const result = await page.evaluate(async ({ redacted_key, token, stored }) => {
+      const token = JSON.parse(raw).value;
       const headers = {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
@@ -58,25 +34,35 @@ cli({
         'x-app-version': '1.0.0',
       };
 
-      // If we have a stored timestamp from apikey-create, use it directly
+      // Get redacted_key from page text
+      const body = document.body?.innerText || '';
+      const lines = body.split('\n').filter(l => l.includes('sk-'));
+      let redacted_key = '';
+      for (const line of lines) {
+        const parts = line.split('\t');
+        if (parts.length >= 3 && parts[0].trim() === name) {
+          redacted_key = parts[1].trim();
+          break;
+        }
+      }
+      if (!redacted_key) return { error: 'key not found on page' };
+
+      // Check for stored created_at from a previous apikey-create
+      const meta = JSON.parse(localStorage.getItem('__apikey_meta') || '{}');
+      const stored = meta[name];
+
       if (stored && stored.created_at) {
         const res = await fetch('/api/v0/users/edit_api_keys', {
           method: 'POST',
           headers,
           body: JSON.stringify({ action: 'delete', name: null, redacted_key, created_at: stored.created_at }),
         });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.code === 0) {
-            return { success: true, method: 'stored', created_at: stored.created_at };
-          }
-        }
+        if (res.ok) return { success: true, method: 'stored' };
       }
 
-      // Scan recent timestamps
+      // Try brute force: scan recent timestamps
       const now = Math.floor(Date.now() / 1000);
-      const start = now - 43200;
-
+      const start = now - 86400;
       for (let ts = start; ts <= now; ts++) {
         try {
           const res = await fetch('/api/v0/users/edit_api_keys', {
@@ -89,25 +75,19 @@ cli({
           if (data.code === 0) {
             const check = document.body?.innerText || '';
             if (!check.includes(redacted_key.slice(0, 10))) {
-              return { success: true, created_at: ts };
+              return { success: true, method: `brute_ts=${ts}` };
             }
           }
         } catch {}
       }
 
-      return { error: 'timestamp not found after scanning 12h range', range: [start, now] };
-    }, { redacted_key: prelim.redacted_key, token: prelim.token, stored: prelim.stored });
+      return { error: 'timestamp not found in last 24h', hint: 'Try deleting from platform.deepseek.com/api_keys' };
+    }, keyName);
 
     if (result.success) {
-      return [{ Name: keyName, Status: 'Deleted', Message: `ok (ts=${result.created_at})` }];
+      return [{ Name: keyName, Status: 'Deleted', Message: result.method }];
     }
 
-    return [{
-      Name: keyName,
-      Status: 'Limited',
-      Message: 'Delete API requires exact created_at timestamp which is not visible on the page. '
-        + 'For keys created with apikey-create, deletion works automatically. '
-        + 'For other keys, delete manually at platform.deepseek.com/api_keys.',
-    }];
+    return [{ Name: keyName, Status: 'Failed', Message: result.error || JSON.stringify(result) }];
   },
 });
