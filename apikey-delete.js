@@ -23,58 +23,65 @@ cli({
     await page.wait({ selector: 'main', timeout: 15 });
     await new Promise((r) => setTimeout(r, 2000));
 
-    // Verify the key exists
-    const exists = await page.evaluate((name) => {
+    // Find the key's redacted_key and created_at from the page text
+    const keyInfo = await page.evaluate((name) => {
       const body = document.body?.innerText || '';
-      return body.includes(name);
+      const lines = body.split('\n').filter(l => l.includes('sk-'));
+      for (const line of lines) {
+        const parts = line.split('\t');
+        if (parts.length >= 3 && parts[0].trim() === name) {
+          return {
+            redacted_key: parts[1].trim(),
+            created_at: parts[2].trim(),
+          };
+        }
+      }
+      return null;
     }, keyName);
 
-    if (!exists) {
-      return [{ Name: keyName, Status: 'Not found', Message: 'Key not found' }];
+    if (!keyInfo) {
+      return [{ Name: keyName, Status: 'Not found', Message: 'Key not found. Use apikey to list all keys.' }];
     }
 
-    // Find the key's row and click the action button in the last column
-    await page.evaluate((name) => {
-      const allEls = Array.from(document.querySelectorAll('*'));
-      const nameEl = allEls.find(el =>
-        (el.textContent || '').trim() === name && el.children.length === 0
-      );
-      if (!nameEl) throw new Error('name element not found');
+    // Parse created_at date to timestamp
+    const dateStr = keyInfo.created_at;
+    const created_at = dateStr && dateStr !== '-'
+      ? Math.floor(new Date(dateStr).getTime() / 1000)
+      : Math.floor(Date.now() / 1000);
 
-      const row = nameEl.closest('tr');
-      if (!row) throw new Error('row not found');
+    // Call the delete API
+    const result = await page.evaluate(async ({ redacted_key, created_at }) => {
+      const raw = localStorage.getItem('userToken');
+      if (!raw) throw new Error('Not logged in.');
+      const token = JSON.parse(raw).value;
 
-      // Last child of the row contains the action button
-      const actionCell = row.children[row.children.length - 1];
-      if (!actionCell) throw new Error('action cell not found');
+      const body = {
+        action: 'delete',
+        name: null,
+        redacted_key,
+        created_at,
+      };
 
-      const actionBtn = actionCell.querySelector('[role="button"]');
-      if (!actionBtn) throw new Error('action button in cell not found');
-
-      actionBtn.click();
-    }, keyName);
-
-    // Wait for confirmation dialog
-    await new Promise((r) => setTimeout(r, 1500));
-
-    // Click the confirm delete button in the dialog
-    await page.evaluate(() => {
-      const allEls = Array.from(document.querySelectorAll('*'));
-      const visible = allEls.filter(el => el.offsetParent !== null);
-
-      // Look for confirm button: text "确认" or "确定" or "删除"
-      const confirmBtn = visible.find(el => {
-        const t = (el.textContent || '').trim();
-        return (t === '确认' || t === '确定' || t === '确认删除' || t.toLowerCase() === 'delete' || t.toLowerCase() === 'confirm')
-          && el.offsetParent !== null;
+      const res = await fetch('/api/v0/users/edit_api_keys', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          referer: 'https://platform.deepseek.com/api_keys',
+          'x-app-version': '1.0.0',
+        },
+        body: JSON.stringify(body),
       });
-      if (confirmBtn) {
-        confirmBtn.click();
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`API error ${res.status}: ${text}`);
       }
-    });
 
-    await new Promise((r) => setTimeout(r, 2000));
+      const data = await res.json();
+      return data;
+    }, { redacted_key: keyInfo.redacted_key, created_at });
 
-    return [{ Name: keyName, Status: 'Deleted', Message: 'Key deleted successfully' }];
+    return [{ Name: keyName, Status: 'Deleted', Message: 'Key deleted via API' }];
   },
 });
