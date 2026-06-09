@@ -102,7 +102,7 @@ cli({
             CacheHit: String(usageMap['PROMPT_CACHE_HIT_TOKEN'] || 0),
             CacheMiss: String(usageMap['PROMPT_CACHE_MISS_TOKEN'] || 0),
             OutputTokens: String(usageMap['RESPONSE_TOKEN'] || 0),
-            CostCNY: rawCost.toFixed(4),
+            CostCNY: rawCost.toFixed(2),
           };
         })
       );
@@ -125,8 +125,8 @@ cli({
         const modelTypes = monthlyCostByType[r.Model] || {};
         const target = costTypes.reduce((s, t) => s + (modelTypes[t] || 0), 0);
         const actual = modelCostSum2[r.Model] || 1;
-        if (target > 0 && Math.abs(actual - target) > 0.0001) {
-          r.CostCNY = (parseFloat(r.CostCNY) * target / actual).toFixed(4);
+        if (target > 0 && Math.abs(actual - target) > 0.005) {
+          r.CostCNY = (parseFloat(r.CostCNY) * target / actual).toFixed(2);
         }
       }
 
