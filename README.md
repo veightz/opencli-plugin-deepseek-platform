@@ -9,6 +9,8 @@ Query DeepSeek platform billing & usage from the command line, powered by [OpenC
 | Command | Description | Auth |
 |---------|-------------|------|
 | `opencli deepseek-platform billing` | Account balance | Browser session (auto) |
+| `opencli deepseek-platform apikey` | List API keys | Browser session (auto) |
+| `opencli deepseek-platform apikey-create` | Create a new API key | Browser session (auto) |
 | `opencli deepseek-platform usage` | Monthly token usage & cost by model | Browser session (auto) |
 | `opencli deepseek-platform usage-daily` | Daily token usage & cost breakdown | Browser session (auto) |
 
