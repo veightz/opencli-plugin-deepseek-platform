@@ -18,7 +18,7 @@ cli({
     { name: 'today', type: 'bool', default: false, help: 'Show only today\'s usage' },
     { name: 'date', help: 'Show usage for a specific date (YYYY-MM-DD)' },
   ],
-  columns: ['Date', 'Model', 'Requests', 'CacheHit', 'CacheMiss', 'OutputTokens', 'CostCNY'],
+  columns: ['Date', 'CostCNY', 'CacheHitRate', 'InputTokens', 'OutputTokens', 'CacheHit', 'CacheMiss'],
 
   func: async (page, kwargs) => {
     await page.goto('https://platform.deepseek.com/usage');
@@ -97,14 +97,20 @@ cli({
             }
           }
 
+          const cacheHitAmt = usageMap['PROMPT_CACHE_HIT_TOKEN'] || 0;
+          const cacheMissAmt = usageMap['PROMPT_CACHE_MISS_TOKEN'] || 0;
+          const totalPrompt = cacheHitAmt + cacheMissAmt;
+          const hitRate = totalPrompt > 0 ? ((cacheHitAmt / totalPrompt) * 100).toFixed(1) + '%' : '-';
+
           return {
             Date: day.date,
-            Model: m.model,
-            Requests: String(usageMap['REQUEST'] || 0),
-            CacheHit: String(usageMap['PROMPT_CACHE_HIT_TOKEN'] || 0),
-            CacheMiss: String(usageMap['PROMPT_CACHE_MISS_TOKEN'] || 0),
-            OutputTokens: String(usageMap['RESPONSE_TOKEN'] || 0),
             CostCNY: (Math.floor(rawCost * 100) / 100).toFixed(2),
+            CacheHitRate: hitRate,
+            InputTokens: String(totalPrompt),
+            OutputTokens: String(usageMap['RESPONSE_TOKEN'] || 0),
+            CacheHit: String(cacheHitAmt),
+            CacheMiss: String(cacheMissAmt),
+            Model: m.model,
           };
         })
       );
@@ -123,7 +129,7 @@ cli({
       if (!today && !date) {
         const datesWithUsage = new Set();
         for (const r of rows) {
-          if (r.Requests !== '0' || r.CacheHit !== '0' || r.CacheMiss !== '0' || r.OutputTokens !== '0') {
+          if (r.InputTokens !== '0' || r.OutputTokens !== '0') {
             datesWithUsage.add(r.Date);
           }
         }
